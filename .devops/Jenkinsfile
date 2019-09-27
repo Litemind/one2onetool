@@ -6,11 +6,14 @@ pipeline {
         }
     }
     stages {
-        stage('Initialise') {
+        stage('Build') {
             steps {
-                echo "Test"
-                sh "docker -v"
-                sh "npm -v"
+                sh "npm install"
+            }
+        }
+        stage('Test') {
+            steps {
+                sh "npm run test"
             }
         }
     }
