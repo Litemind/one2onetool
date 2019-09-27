@@ -1,12 +1,17 @@
 pipeline {
     agent {
-        docker {
-            image 'node:alpine'
+        dockerfile {
+            dir '.devops'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
     stages {
-        stage('Start') {
-            echo "Test"
+        stage('Initialise') {
+            steps {
+                echo "Test"
+                sh "docker -v"
+                sh "npm -v"
+            }
         }
     }
 }
