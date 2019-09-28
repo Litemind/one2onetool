@@ -9,14 +9,24 @@ pipeline {
         HOME = '.'
     }
     stages {
-        stage('Build') {
-            steps {
-                sh "npm install"
-            }
-        }
+        // stage('Build') {
+        //     steps {
+        //         sh "npm install"
+        //     }
+        // }
         stage('Test') {
             steps {
                 sh "npm run test"
+            }
+        }
+        stage('Build Docker image') {
+            steps {
+                script {
+                    docker.withRegistry("https://224607039606.dkr.ecr.ap-southeast-1.amazonaws.com/one2onetool", "ecr:ap-southeast-1:596141fb-898e-4fb5-9658-68d5852aa057") {
+                        def appImage = docker.build("one2onetool:${env.BUILD_ID}")
+                        appImage.push()
+                    }
+                }
             }
         }
     }
