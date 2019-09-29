@@ -38,6 +38,7 @@ pipeline {
         not {
           changelog '.*\\[ci-skip\\].*'
         }
+        branch 'production'
       }
       environment {
         GIT_CREDENTIALS = credentials('727fd623-3069-49de-9745-14d04f511d4b')
@@ -62,7 +63,7 @@ pipeline {
         not {
           changelog '.*\\[ci-skip\\].*'
         }
-        branch 'kw-setup-cicd'
+        branch 'staging'
       }
       steps {
         // Add any additional Staging build steps
@@ -74,12 +75,12 @@ pipeline {
         }
       }
     }
-    stage('Build Docker image - Release') {
+    stage('Build Docker image - Production') {
       when {
         not {
           changelog '.*\\[ci-skip\\].*'
         }
-        branch 'release'
+        branch 'production'
       }
       steps {
         // Add any additional Release build steps
