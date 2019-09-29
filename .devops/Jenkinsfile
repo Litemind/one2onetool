@@ -15,11 +15,12 @@ pipeline {
     EB_HEALTHCHECK_TIMEOUT_MINS=10
     EB_SLEEP_TIME_BTW_HEALTHCHECK_SEC=30
     EB_APPLICATION_NAME="one2onetool"
-    EB_ENVIRONMENT_ID="e-m9vdf277hz"
     EB_UPLOAD_S3_BUCKET_NAME="app-beanstalk-resources"
     EB_UPLOAD_S3_KEY_PREFIX="${env.BRANCH_NAME}/b${env.BUILD_ID}"
     EB_UPLOAD_S3_PACKAGE_NAME="Dockerrun.aws.json"
     EB_UPLOAD_VERSION_LABEL="one2onetool-${env.BRANCH_NAME}-b${env.BUILD_NUMBER}"
+    EB_STAGING_ENVIRONMENT_ID="e-wnsay3yn86"
+    EB_PROD_ENVIRONMENT_ID="e-m9vdf277hz"
   }
   stages {
     stage('Test') {
@@ -58,35 +59,17 @@ pipeline {
         '''
       }
     }
-    stage('Build Docker image - Staging') {
+    stage('Build Docker image') {
       when {
         not {
           changelog '.*\\[ci-skip\\].*'
         }
-        branch 'staging'
       }
       steps {
         // Add any additional Staging build steps
         script {
           docker.withRegistry("https://224607039606.dkr.ecr.ap-southeast-1.amazonaws.com/one2onetool", "ecr:ap-southeast-1:596141fb-898e-4fb5-9658-68d5852aa057") {
             def appImage = docker.build("one2onetool:${env.BRANCH_NAME}-b${env.BUILD_ID}")
-            appImage.push()
-          }
-        }
-      }
-    }
-    stage('Build Docker image - Production') {
-      when {
-        not {
-          changelog '.*\\[ci-skip\\].*'
-        }
-        branch 'production'
-      }
-      steps {
-        // Add any additional Release build steps
-        script {
-          docker.withRegistry("https://224607039606.dkr.ecr.ap-southeast-1.amazonaws.com/one2onetool", "ecr:ap-southeast-1:596141fb-898e-4fb5-9658-68d5852aa057") {
-            def appImage = docker.build("one2onetool:${env.BRANCH_NAME}-b${env.BUILD_ID}", "--build-arg IS_PROD=1 .")
             appImage.push()
           }
         }
@@ -109,17 +92,33 @@ pipeline {
         }
       }
     }
-    stage('Deploy to Elastic Beanstalk') {
+    stage('Deploy to Elastic Beanstalk - Staging') {
       when {
         not {
           changelog '.*\\[ci-skip\\].*'
         }
+        branch 'staging'
       }
       steps {
         sh '''
           aws elasticbeanstalk create-application-version --region ap-southeast-1 --application-name "${EB_APPLICATION_NAME}" --version-label "${EB_UPLOAD_VERSION_LABEL}" --source-bundle S3Bucket="${EB_UPLOAD_S3_BUCKET_NAME}",S3Key="${EB_UPLOAD_S3_KEY_PREFIX}/${EB_UPLOAD_S3_PACKAGE_NAME}"
 
-          aws elasticbeanstalk update-environment --region ap-southeast-1 --application-name "${EB_APPLICATION_NAME}" --environment-id "${EB_ENVIRONMENT_ID}" --version-label "${EB_UPLOAD_VERSION_LABEL}"
+          aws elasticbeanstalk update-environment --region ap-southeast-1 --application-name "${EB_APPLICATION_NAME}" --environment-id "${EB_STAGING_ENVIRONMENT_ID}" --version-label "${EB_UPLOAD_VERSION_LABEL}"
+        '''
+      }
+    }
+    stage('Deploy to Elastic Beanstalk - Production') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+        branch 'production'
+      }
+      steps {
+        sh '''
+          aws elasticbeanstalk create-application-version --region ap-southeast-1 --application-name "${EB_APPLICATION_NAME}" --version-label "${EB_UPLOAD_VERSION_LABEL}" --source-bundle S3Bucket="${EB_UPLOAD_S3_BUCKET_NAME}",S3Key="${EB_UPLOAD_S3_KEY_PREFIX}/${EB_UPLOAD_S3_PACKAGE_NAME}"
+
+          aws elasticbeanstalk update-environment --region ap-southeast-1 --application-name "${EB_APPLICATION_NAME}" --environment-id "${EB_PROD_ENVIRONMENT_ID}" --version-label "${EB_UPLOAD_VERSION_LABEL}"
         '''
       }
     }
