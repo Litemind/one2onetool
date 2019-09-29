@@ -22,11 +22,6 @@ pipeline {
     EB_UPLOAD_VERSION_LABEL="one2onetool-${env.BRANCH_NAME}-b${env.BUILD_NUMBER}"
   }
   stages {
-    // stage('Build') {
-    //   steps {
-    //     sh "npm install"
-    //   }
-    // }
     stage('Test') {
       steps {
         sh "npm install"
