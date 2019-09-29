@@ -97,7 +97,7 @@ pipeline {
         not {
           changelog '.*\\[ci-skip\\].*'
         }
-        branch 'staging'
+        branch 'kw-split-into-multiple-deployments'
       }
       steps {
         sh '''
