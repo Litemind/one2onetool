@@ -13,8 +13,8 @@ EXPOSE 3000
 RUN adduser -D app
 USER app
 
-ARG IS_PROD
-ENV DATA_FILE=${IS_PROD:+Questions.json}
-ENV DATA_FILE=${DATA_FILE:-Questions-test.json}
+# ARG IS_PROD
+# ENV DATA_FILE=${IS_PROD:+Questions.json}
+# ENV DATA_FILE=${DATA_FILE:-Questions-test.json}
 
 CMD ["node", "index.js"]
