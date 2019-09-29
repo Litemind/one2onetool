@@ -1,0 +1,136 @@
+pipeline {
+  agent {
+    dockerfile {
+      dir '.devops'
+      args '-v /var/run/docker.sock:/var/run/docker.sock'
+    }
+  }
+  options {
+    withAWS(credentials: '596141fb-898e-4fb5-9658-68d5852aa057')
+  }
+  environment {
+    HOME='.'
+    ECR_URL='224607039606.dkr.ecr.ap-southeast-1.amazonaws.com/one2onetool'
+    ECR_REPO_NAME='one2onetool'
+    EB_HEALTHCHECK_TIMEOUT_MINS=10
+    EB_SLEEP_TIME_BTW_HEALTHCHECK_SEC=30
+    EB_APPLICATION_NAME="one2onetool"
+    EB_ENVIRONMENT_ID="e-m9vdf277hz"
+    EB_UPLOAD_S3_BUCKET_NAME="app-beanstalk-resources"
+    EB_UPLOAD_S3_KEY_PREFIX="${env.BRANCH_NAME}/b${env.BUILD_ID}"
+    EB_UPLOAD_S3_PACKAGE_NAME="Dockerrun.aws.json"
+    EB_UPLOAD_VERSION_LABEL="one2onetool-${env.BRANCH_NAME}-b${env.BUILD_NUMBER}"
+  }
+  stages {
+    stage('Test') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+      }
+      steps {
+        sh "npm ci"
+        sh "npm run test"
+      }
+    }
+    stage('Update version') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+      }
+      environment {
+        GIT_CREDENTIALS = credentials('727fd623-3069-49de-9745-14d04f511d4b')
+      }
+      steps {
+        sh 'npm --no-git-tag-version version minor'
+        sh '''
+          git config --local credential.helper "!f() { echo username=\\$GIT_CREDENTIALS_USR; echo password=\\$GIT_CREDENTIALS_PSW; }; f"
+          git status
+          git add package*.json
+          git config user.email "vernon121@hotmail.com"
+          git config user.name "Jenkins"
+          git commit -m "version bump [ci-skip]"
+
+          # This assumes the branch I am pushing to is the same as the branch I cloned
+          git push origin HEAD:${BRANCH_NAME}
+        '''
+      }
+    }
+    stage('Build Docker image - Staging') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+        branch 'kw-setup-cicd'
+      }
+      steps {
+        // Add any additional Staging build steps
+        script {
+          docker.withRegistry("https://224607039606.dkr.ecr.ap-southeast-1.amazonaws.com/one2onetool", "ecr:ap-southeast-1:596141fb-898e-4fb5-9658-68d5852aa057") {
+            def appImage = docker.build("one2onetool:${env.BRANCH_NAME}-b${env.BUILD_ID}")
+            appImage.push()
+          }
+        }
+      }
+    }
+    stage('Build Docker image - Release') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+        branch 'release'
+      }
+      steps {
+        // Add any additional Release build steps
+        script {
+          docker.withRegistry("https://224607039606.dkr.ecr.ap-southeast-1.amazonaws.com/one2onetool", "ecr:ap-southeast-1:596141fb-898e-4fb5-9658-68d5852aa057") {
+            def appImage = docker.build("one2onetool:${env.BRANCH_NAME}-b${env.BUILD_ID}", "--build-arg IS_PROD=1 .")
+            appImage.push()
+          }
+        }
+      }
+    }
+    stage('Upload to S3') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+      }
+      steps {
+        dir('.devops') {
+          sh 'sed -e "s/<ECR_TAG>/${BRANCH_NAME}-b${BUILD_ID}/" Dockerrun.aws.json.template > Dockerrun.aws.json'
+          'de.taimos.pipeline.aws.S3UploadStep'(
+            file:'Dockerrun.aws.json',
+            bucket:"${EB_UPLOAD_S3_BUCKET_NAME}",
+            path:"${EB_UPLOAD_S3_KEY_PREFIX}/${EB_UPLOAD_S3_PACKAGE_NAME}"
+          )
+        }
+      }
+    }
+    stage('Deploy to Elastic Beanstalk') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+      }
+      steps {
+        sh '''
+          aws elasticbeanstalk create-application-version --region ap-southeast-1 --application-name "${EB_APPLICATION_NAME}" --version-label "${EB_UPLOAD_VERSION_LABEL}" --source-bundle S3Bucket="${EB_UPLOAD_S3_BUCKET_NAME}",S3Key="${EB_UPLOAD_S3_KEY_PREFIX}/${EB_UPLOAD_S3_PACKAGE_NAME}"
+
+          aws elasticbeanstalk update-environment --region ap-southeast-1 --application-name "${EB_APPLICATION_NAME}" --environment-id "${EB_ENVIRONMENT_ID}" --version-label "${EB_UPLOAD_VERSION_LABEL}"
+        '''
+      }
+    }
+  }
+  post {
+    failure {
+      emailext (
+        subject: "Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' - FAILURE",
+        body: """<p>Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' - FAILURE:</p>
+          <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
+        recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+      )
+    }
+  }
+}
