@@ -23,13 +23,45 @@ pipeline {
   }
   stages {
     stage('Test') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+      }
       steps {
-        sh "npm install"
+        sh "npm ci"
         sh "npm run test"
+      }
+    }
+    stage('Update version') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+      }
+      environment {
+        GIT_CREDENTIALS = credentials('727fd623-3069-49de-9745-14d04f511d4b')
+      }
+      steps {
+        sh 'npm --no-git-tag-version version minor'
+        sh '''
+          git config --local credential.helper "!f() { echo username=\\$GIT_CREDENTIALS_USR; echo password=\\$GIT_CREDENTIALS_PSW; }; f"
+          git status
+          git add package*.json
+          git config user.email "vernon121@hotmail.com"
+          git config user.name "Jenkins"
+          git commit -m "version bump [ci-skip]"
+
+          # This assumes the branch I am pushing to is the same as the branch I cloned
+          git push origin HEAD:${BRANCH_NAME}
+        '''
       }
     }
     stage('Build Docker image - Staging') {
       when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
         branch 'kw-setup-cicd'
       }
       steps {
@@ -44,6 +76,9 @@ pipeline {
     }
     stage('Build Docker image - Release') {
       when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
         branch 'release'
       }
       steps {
@@ -57,6 +92,11 @@ pipeline {
       }
     }
     stage('Upload to S3') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+      }
       steps {
         dir('.devops') {
           sh 'sed -e "s/<ECR_TAG>/${BRANCH_NAME}-b${BUILD_ID}/" Dockerrun.aws.json.template > Dockerrun.aws.json'
@@ -69,6 +109,11 @@ pipeline {
       }
     }
     stage('Deploy to Elastic Beanstalk') {
+      when {
+        not {
+          changelog '.*\\[ci-skip\\].*'
+        }
+      }
       steps {
         sh '''
           aws elasticbeanstalk create-application-version --region ap-southeast-1 --application-name "${EB_APPLICATION_NAME}" --version-label "${EB_UPLOAD_VERSION_LABEL}" --source-bundle S3Bucket="${EB_UPLOAD_S3_BUCKET_NAME}",S3Key="${EB_UPLOAD_S3_KEY_PREFIX}/${EB_UPLOAD_S3_PACKAGE_NAME}"
@@ -79,14 +124,6 @@ pipeline {
     }
   }
   post {
-    always {
-      emailext (
-        subject: "Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
-        body: """<p>Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
-          <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>""",
-        recipientProviders: [[$class: 'DevelopersRecipientProvider']]
-      )
-    }
     failure {
       emailext (
         subject: "Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' - FAILURE",

@@ -8,6 +8,9 @@ pip install awscli && \
 apk --purge -v del py-pip && \
 rm /var/cache/apk/*
 
+# Install Git
+RUN apk add --no-cache git
+
 # Install NodeJS and NPM
 RUN apk add --update nodejs npm
 
