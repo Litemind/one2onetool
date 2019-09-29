@@ -38,6 +38,7 @@ pipeline {
         not {
           changelog '.*\\[ci-skip\\].*'
         }
+        branch 'production'
       }
       environment {
         GIT_CREDENTIALS = credentials('727fd623-3069-49de-9745-14d04f511d4b')
