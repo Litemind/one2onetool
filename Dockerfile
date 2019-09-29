@@ -8,4 +8,9 @@ RUN npm install
 COPY . .
 
 EXPOSE 3000
+
+ARG IS_PROD
+ENV DATA_FILE=${IS_PROD:+Questions.json}
+ENV DATA_FILE=${DATA_FILE:-Questions-test.json}
+
 CMD ["node", "index.js"]

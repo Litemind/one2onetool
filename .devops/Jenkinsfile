@@ -33,12 +33,30 @@ pipeline {
         sh "npm run test"
       }
     }
-    stage('Build Docker image') {
+    stage('Build Docker image - Staging') {
+      when {
+        branch 'kw-setup-cicd'
+      }
       steps {
+        // Add any additional Staging build steps
         script {
           docker.withRegistry("https://224607039606.dkr.ecr.ap-southeast-1.amazonaws.com/one2onetool", "ecr:ap-southeast-1:596141fb-898e-4fb5-9658-68d5852aa057") {
-              def appImage = docker.build("one2onetool:${env.BRANCH_NAME}-b${env.BUILD_ID}")
-              appImage.push()
+            def appImage = docker.build("one2onetool:${env.BRANCH_NAME}-b${env.BUILD_ID}")
+            appImage.push()
+          }
+        }
+      }
+    }
+    stage('Build Docker image - Release') {
+      when {
+        branch 'release'
+      }
+      steps {
+        // Add any additional Release build steps
+        script {
+          docker.withRegistry("https://224607039606.dkr.ecr.ap-southeast-1.amazonaws.com/one2onetool", "ecr:ap-southeast-1:596141fb-898e-4fb5-9658-68d5852aa057") {
+            def appImage = docker.build("one2onetool:${env.BRANCH_NAME}-b${env.BUILD_ID}", "--build-arg IS_PROD=1 .")
+            appImage.push()
           }
         }
       }
