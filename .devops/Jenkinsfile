@@ -55,7 +55,7 @@ pipeline {
           git commit -m "version bump [ci-skip]"
 
           # This assumes the branch I am pushing to is the same as the branch I cloned
-          # git push origin HEAD:${BRANCH_NAME}
+          git push origin HEAD:${BRANCH_NAME}
         '''
       }
     }
